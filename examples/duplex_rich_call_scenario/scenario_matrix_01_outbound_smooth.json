@@ -1,0 +1,79 @@
+{
+  "scenario_id": "matrix_01_outbound_smooth",
+  "description": "【顺畅结案】外呼套餐变更：客户配合、无抢话，客服说明渠道与查询方式后收线。",
+  "matrix_validation": {
+    "min_barge_in": 0,
+    "min_segment_final": 4,
+    "min_reactive_after_barge": 0,
+    "require_barge_plan": false
+  },
+  "system_prompt": "你是中国移动幺零零八六**外呼**客服（你致电客户）。不要说「感谢您的来电」；可用「谢谢接听」「感谢您的配合」。让客户用移动App或拨打幺零零八六是正常指引。「【客户·识别】」为 ASR 转写可能不全。结合「【通话记忆·追踪】」勿编造。应答口语化、短句为主；禁止 markdown、分条、反问。号码写「幺零零八六」。",
+  "gap_ms": 400,
+  "random_customer": {
+    "pool": "customer_pool.json",
+    "identity_pool_key": "identity_confirm",
+    "package_followup_pool_key": "package_confirm",
+    "min_tangents": 0,
+    "max_tangents": 0,
+    "inter_snippet_gap_ms": 1200,
+    "barge_core_keys": {},
+    "extra_customer_uplink_pools": {
+      "customer_ack_biz": "smooth_ack_outbound",
+      "customer_confirm_done": "smooth_confirm_ok"
+    }
+  },
+  "rounds": [
+    { "name": "opening_verify", "mode": "listen" },
+    {
+      "name": "customer_confirm_identity",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_id_a.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "bridge_to_biz",
+      "mode": "listen",
+      "llm_user": "结合「通话记忆」与最新「客户·识别」。外呼：先简短致谢接听，再用一句确认是否咨询套餐变更，总共不超过28字。勿说「感谢您的来电」。"
+    },
+    {
+      "name": "customer_confirm_package",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_pc_1.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "biz_long",
+      "mode": "listen",
+      "llm_user": "结合「通话记忆」。客户未抢话。请主动用约85到95字说明：套餐变更可在移动App或幺零零八六办理；费用与生效以办理时页面或告知为准；具体明细请客户在App或幺零零八六自查。不要用「您先说」把话头交回。禁止 markdown。"
+    },
+    {
+      "name": "customer_ack_biz",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_oa_1.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "assist_wrap_a",
+      "mode": "listen",
+      "llm_user": "结合「通话记忆」与客户刚一句。用不超过55字简短回应（例如是否可走 App、费用何时体现等），语气平稳，不重复长说明。"
+    },
+    {
+      "name": "customer_confirm_done",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_ok_1.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "assist_wrap_b",
+      "mode": "listen",
+      "llm_user": "结合「通话记忆」。收束：若客户无新问题，一句提醒后续可查 App 或幺零零八六，并致谢配合、祝愉快。不超过52字。勿说「感谢您的来电」。"
+    },
+    {
+      "name": "customer_end_call",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_he_1.wav",
+      "post_user_tail_ms": 450
+    },
+    { "name": "goodbye_close", "mode": "listen" }
+  ]
+}

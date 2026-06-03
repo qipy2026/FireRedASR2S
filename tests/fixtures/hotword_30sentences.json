@@ -1,0 +1,17 @@
+{
+  "_comment": "Domain hotwords + reference sentences for T4 hotword recall test.",
+  "hotwords": [
+    "千问", "通义", "豆包", "文心", "盘古",
+    "Cursor", "Anthropic", "FireRedASR", "Conformer", "Whisper"
+  ],
+  "sentences": [
+    {"ref": "我用Cursor写代码", "asr_words": ["我", "用", "Cursor", "写", "代码"]},
+    {"ref": "千问大模型很强", "asr_words": ["千问", "大", "模型", "很", "强"]},
+    {"ref": "通义实验室开源了FireRedASR", "asr_words": ["通义", "实验室", "开源", "了", "FireRedASR"]},
+    {"ref": "Anthropic推出了Claude", "asr_words": ["Anthropic", "推出", "了", "Claude"]},
+    {"ref": "Whisper和Conformer都是ASR模型", "asr_words": ["Whisper", "和", "Conformer", "都", "是", "ASR", "模型"]},
+    {"ref": "豆包App体验不错", "asr_words": ["豆包", "App", "体验", "不", "错"]},
+    {"ref": "文心一言新版本更新了", "asr_words": ["文心", "一言", "新", "版本", "更新", "了"]},
+    {"ref": "盘古模型支持多模态", "asr_words": ["盘古", "模型", "支持", "多", "模态"]}
+  ]
+}

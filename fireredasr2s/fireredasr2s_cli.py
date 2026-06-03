@@ -14,12 +14,13 @@ from textgrid import IntervalTier, TextGrid
 from fireredasr2s.fireredasr2 import FireRedAsr2Config
 from fireredasr2s.fireredasr2system import (FireRedAsr2System,
                                             FireRedAsr2SystemConfig)
+from fireredasr2s.fireredenh import FireRedDenoiserConfig
 from fireredasr2s.fireredlid import FireRedLidConfig
+from fireredasr2s.logging_config import configure_logging
 from fireredasr2s.fireredpunc import FireRedPuncConfig
 from fireredasr2s.fireredvad import FireRedVadConfig
 
-logging.basicConfig(level=logging.INFO,
-                    format="%(asctime)s (%(module)s:%(lineno)d) %(levelname)s: %(message)s")
+configure_logging()
 logger = logging.getLogger("fireredasr2s.asr_system")
 
 
@@ -41,12 +42,213 @@ module_g = parser.add_argument_group("Module Switches")
 module_g.add_argument('--enable_vad', type=int, default=1, choices=[0, 1])
 module_g.add_argument('--enable_lid', type=int, default=1, choices=[0, 1])
 module_g.add_argument('--enable_punc', type=int, default=1, choices=[0, 1])
+module_g.add_argument(
+    '--enable_itn',
+    type=int,
+    default=0,
+    choices=[0, 1],
+    help='Inverse Text Normalization (CN spoken numbers/units → digits/%/℃ via cn2an)',
+)
+module_g.add_argument(
+    '--enable_denoise',
+    type=int,
+    default=0,
+    choices=[0, 1],
+    help='Speech enhancement before VAD (optional deps: noisereduce / deepfilternet)',
+)
+module_g.add_argument(
+    '--denoise_backend',
+    type=str,
+    default='noisereduce',
+    choices=['noisereduce', 'df'],
+    help='Denoiser backend: noisereduce (default) or df (DeepFilterNet)',
+)
+module_g.add_argument(
+    '--enable_diarization',
+    type=int,
+    default=0,
+    choices=[0, 1],
+    help='ModelScope segmentation_clustering speaker diarization (requires modelscope + downloads)',
+)
+module_g.add_argument(
+    '--diar_model_id',
+    type=str,
+    default='damo/speech_campplus_speaker-diarization_common',
+    help='ModelScope model id or local dir for speaker_diarization task',
+)
+module_g.add_argument(
+    '--diar_model_revision',
+    type=str,
+    default='',
+    help='Optional model_revision for ModelScope pipeline',
+)
+module_g.add_argument(
+    '--diar_input_mode',
+    type=str,
+    default='full',
+    choices=['full', 'vad_segments'],
+    help='Diarization audio packaging: full file vs VAD slices',
+)
+module_g.add_argument(
+    '--diar_align_level',
+    type=str,
+    default='segment',
+    choices=['segment', 'word'],
+    help='Map speakers to sentences by VAD segment overlap or ASR token timestamps',
+)
+module_g.add_argument(
+    '--diar_refine_subsegment',
+    type=int,
+    default=0,
+    choices=[0, 1],
+    help='Placeholder span refinement hook (currently no-op)',
+)
+module_g.add_argument(
+    '--diar_min_speaker_dur_ms',
+    type=int,
+    default=400,
+    help='Merge word-diar fragments shorter than this (ms)',
+)
+module_g.add_argument(
+    '--diar_backend',
+    type=str,
+    default='modelscope_campplus',
+    help=(
+        'Diarization: modelscope_campplus | pyannote | rttm_sidecar | '
+        'spectral_tone_pair (dual-tone / proxy dialog) | speakerlab (raises)'
+    ),
+)
+module_g.add_argument(
+    '--diar_hf_token',
+    type=str,
+    default='',
+    help='HuggingFace token for pyannote backend (optional)',
+)
+module_g.add_argument(
+    '--diar_spectral_f0_hz',
+    type=float,
+    default=220.0,
+    help='spectral_tone_pair backend: first reference tone (Hz)',
+)
+module_g.add_argument(
+    '--diar_spectral_f1_hz',
+    type=float,
+    default=330.0,
+    help='spectral_tone_pair backend: second reference tone (Hz)',
+)
+module_g.add_argument(
+    '--diar_text_labeled_mode',
+    type=str,
+    default='transcript_order',
+    choices=['transcript_order', 'cluster_id'],
+    help=(
+        'Prefix in text_labeled: transcript_order = 说话人1..K by first sentence occurrence; '
+        'cluster_id = 聚类 id + 1 (aligns with diarization_spans, may skip numbers)'
+    ),
+)
+module_g.add_argument(
+    '--enable_speaker_id',
+    type=int,
+    default=0,
+    choices=[0, 1],
+    help='Optional enrollment: match sentence audio to registered speaker embeddings',
+)
+module_g.add_argument(
+    '--speaker_registry_path',
+    type=str,
+    default='',
+    help='JSON path to persist speaker embeddings (optional)',
+)
+module_g.add_argument(
+    '--speaker_match_threshold',
+    type=float,
+    default=0.999,
+    help='Cosine similarity threshold for enrollment match',
+)
+module_g.add_argument(
+    '--speaker_embedder',
+    type=str,
+    default='content_hash',
+    help=(
+        'Speaker embedding: content_hash | spectral_stats | modelscope_campplus_sv '
+        '(requires pip install modelscope + model download)'
+    ),
+)
+module_g.add_argument(
+    '--speaker_embedder_model_id',
+    type=str,
+    default='',
+    help='modelscope_campplus_sv: ModelScope hub id (default built-in CAM++ zh 16k)',
+)
+module_g.add_argument(
+    '--speaker_embedder_model_revision',
+    type=str,
+    default='',
+    help='Optional ModelScope model_revision for SV embedder',
+)
+module_g.add_argument(
+    '--register_speaker',
+    action='append',
+    default=[],
+    metavar='NAME=WAV',
+    help=(
+        'Before transcribing: enroll display name with audio (repeatable). '
+        'Implies --enable_speaker_id 1. Example: --register_speaker 张三=./enroll_zhang.wav'
+    ),
+)
+module_g.add_argument(
+    '--natural_speech_speaker_stack',
+    type=int,
+    default=0,
+    choices=[0, 1],
+    help=(
+        'Set CAM++ hub IDs + production SV cosine threshold (~0.35); use with '
+        '--enable_diarization 1 and/or --enable_speaker_id 1 (requires modelscope). '
+        '--register_speaker implies --enable_speaker_id 1.'
+    ),
+)
+module_g.add_argument(
+    '--production_sv_threshold',
+    type=float,
+    default=0.35,
+    help='With --natural_speech_speaker_stack 1: enrollment cosine threshold for CAM++ SV',
+)
 
 asr_g = parser.add_argument_group("ASR Options")
 asr_g.add_argument('--asr_type', type=str, default="aed", choices=["aed", "llm"])
 asr_g.add_argument('--asr_model_dir', type=str, default="pretrained_models/FireRedASR2-AED")
 asr_g.add_argument('--asr_use_gpu', type=int, default=1)
+asr_g.add_argument(
+    '--asr_device',
+    type=str,
+    default='',
+    help='ASR/LLM torch device, e.g. xpu or cuda:0; empty + asr_use_gpu=1 → cuda else xpu (Intel +xpu / IPEX) else cpu',
+)
+asr_g.add_argument(
+    '--asr_runtime',
+    type=str,
+    default='torch',
+    choices=['torch', 'vllm', 'trtllm'],
+    help='LLM decoding runtime (AED ignores this)',
+)
 asr_g.add_argument('--asr_use_half', type=int, default=0)
+asr_g.add_argument(
+    '--aed_dynamic_int8_pt',
+    type=str,
+    default='',
+    help=(
+        'AED only: load CPU dynamic INT8 Linear weights from this file '
+        '(see scripts/quantize_aed_int8.py). Requires --asr_use_gpu 0 and --asr_use_half 0.'
+    ),
+)
+asr_g.add_argument(
+    '--hotwords',
+    type=str,
+    default='',
+    help='Comma-separated hotword phrases for AED beam biasing',
+)
+asr_g.add_argument('--hotword_weight', type=float, default=0.0)
+asr_g.add_argument('--hotword_complete_bonus', type=float, default=0.0)
 asr_g.add_argument("--asr_batch_size", type=int, default=1)
 # FireRedASR-AED
 asr_g.add_argument("--beam_size", type=int, default=3)
@@ -86,6 +288,11 @@ punc_g.add_argument('--punc_sentence_max_length', type=int, default=-1)
 
 
 def main(args):
+    reg_specs = [x.strip() for x in (args.register_speaker or []) if x and str(x).strip()]
+    if reg_specs and not int(args.enable_speaker_id):
+        logger.info("--register_speaker set: enabling speaker_id (enable_speaker_id=1)")
+        args.enable_speaker_id = 1
+
     wavs = get_wav_info(args)
     if args.outdir:
         os.makedirs(args.outdir, exist_ok=True)
@@ -107,6 +314,7 @@ def main(args):
     # LID
     lid_config = FireRedLidConfig(args.lid_use_gpu)
     # ASR
+    hotwords = [x.strip() for x in args.hotwords.split(",") if x.strip()]
     asr_config = FireRedAsr2Config(
         args.asr_use_gpu,
         args.asr_use_half,
@@ -119,22 +327,83 @@ def main(args):
         args.return_timestamp,
         0, 1.0, 0.0, 1.0,
         args.elm_dir,
-        args.elm_weight
+        args.elm_weight,
+        device=(args.asr_device or "").strip(),
+        hotwords=hotwords,
+        hotword_weight=args.hotword_weight,
+        hotword_complete_bonus=args.hotword_complete_bonus,
+        runtime=args.asr_runtime,
+        aed_dynamic_int8_pt=(args.aed_dynamic_int8_pt or "").strip(),
     )
     # Punc
     punc_config = FireRedPuncConfig(
         args.punc_use_gpu,
         args.punc_sentence_max_length
     )
+    denoise_config = FireRedDenoiserConfig(backend=args.denoise_backend)
 
     asr_system_config = FireRedAsr2SystemConfig(
-        args.vad_model_dir, args.lid_model_dir,
-        args.asr_type, args.asr_model_dir, args.punc_model_dir,
-        vad_config, lid_config, asr_config, punc_config,
-        args.asr_batch_size, args.punc_batch_size,
-        args.enable_vad, args.enable_lid, args.enable_punc
+        vad_model_dir=args.vad_model_dir,
+        lid_model_dir=args.lid_model_dir,
+        asr_type=args.asr_type,
+        asr_model_dir=args.asr_model_dir,
+        punc_model_dir=args.punc_model_dir,
+        vad_config=vad_config,
+        lid_config=lid_config,
+        asr_config=asr_config,
+        punc_config=punc_config,
+        asr_batch_size=args.asr_batch_size,
+        punc_batch_size=args.punc_batch_size,
+        enable_vad=bool(args.enable_vad),
+        enable_lid=bool(args.enable_lid),
+        enable_punc=bool(args.enable_punc),
+        enable_itn=bool(args.enable_itn),
+        enable_denoise=bool(args.enable_denoise),
+        denoise_config=denoise_config,
+        enable_diarization=bool(args.enable_diarization),
+        diar_model_id=args.diar_model_id,
+        diar_model_revision=(args.diar_model_revision or None),
+        diar_input_mode=args.diar_input_mode,
+        diar_align_level=args.diar_align_level,
+        diar_refine_subsegment=bool(args.diar_refine_subsegment),
+        diar_min_speaker_dur_ms=int(args.diar_min_speaker_dur_ms),
+        diar_backend=args.diar_backend,
+        diar_hf_token=(args.diar_hf_token or "").strip(),
+        diar_spectral_f0_hz=float(args.diar_spectral_f0_hz),
+        diar_spectral_f1_hz=float(args.diar_spectral_f1_hz),
+        diar_text_labeled_mode=str(args.diar_text_labeled_mode),
+        enable_speaker_id=bool(args.enable_speaker_id),
+        speaker_registry_path=(args.speaker_registry_path or "").strip(),
+        speaker_match_threshold=float(args.speaker_match_threshold),
+        speaker_embedder=args.speaker_embedder,
+        speaker_embedder_model_id=(args.speaker_embedder_model_id or "").strip(),
+        speaker_embedder_model_revision=(
+            (args.speaker_embedder_model_revision or "").strip() or None
+        ),
     )
+    if bool(args.natural_speech_speaker_stack):
+        from fireredasr2s.firereddiar.production import with_natural_speech_speaker_stack
+
+        asr_system_config = with_natural_speech_speaker_stack(
+            asr_system_config,
+            sv_match_threshold=float(args.production_sv_threshold),
+        )
     asr_system = FireRedAsr2System(asr_system_config)
+
+    for spec in reg_specs:
+        if "=" not in spec:
+            raise ValueError(
+                f"--register_speaker expects NAME=path, got {spec!r} "
+                "(use e.g. --register_speaker alice=./alice_enroll.wav)"
+            )
+        name, wpath = spec.split("=", 1)
+        name, wpath = name.strip(), wpath.strip()
+        if not name or not wpath:
+            raise ValueError(f"invalid --register_speaker entry: {spec!r}")
+        if not os.path.isfile(wpath):
+            raise FileNotFoundError(f"enrollment wav not found for {name!r}: {wpath}")
+        logger.info("Register speaker %r from %s", name, wpath)
+        asr_system.register_speaker(name, wpath)
 
     for i, (uttid, wav_path) in enumerate(wavs):
         logger.info("")

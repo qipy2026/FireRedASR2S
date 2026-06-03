@@ -29,6 +29,12 @@ parser.add_argument("--output", type=str)
 
 # Decode Options
 parser.add_argument('--use_gpu', type=int, default=1)
+parser.add_argument(
+    '--device',
+    type=str,
+    default='',
+    help='torch device e.g. xpu, cuda:0; empty + use_gpu=1 → cuda else xpu (Intel +xpu / IPEX) else cpu',
+)
 parser.add_argument('--use_half', type=int, default=0)
 parser.add_argument("--batch_size", type=int, default=1)
 parser.add_argument("--beam_size", type=int, default=1)
@@ -70,7 +76,8 @@ def main(args):
             args.llm_length_penalty,
             args.temperature,
             args.elm_dir,
-            args.elm_weight
+            args.elm_weight,
+            device=(args.device or "").strip(),
     )
     model = FireRedAsr2.from_pretrained(args.asr_type, args.model_dir, asr_config)
 

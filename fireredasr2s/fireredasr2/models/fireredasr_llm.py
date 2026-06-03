@@ -137,6 +137,25 @@ class FireRedAsrLlm(nn.Module):
         max_new_tokens = speech_features.size(1) if decode_max_len < 1 else decode_max_len
         max_new_tokens = max(1, max_new_tokens)
 
+        logging.info(
+            "llm.generate: max_new_tokens=%s num_beams=%s do_sample=False min_length=%s "
+            "repetition_penalty=%s length_penalty=%s temperature=%s "
+            "bos_token_id=%s eos_token_id=%s pad_token_id=%s "
+            "inputs_embeds_shape=%s attention_mask_shape=%s dtype=%s",
+            max_new_tokens,
+            beam_size,
+            decode_min_len,
+            repetition_penalty,
+            llm_length_penalty,
+            temperature,
+            self.llm.config.bos_token_id,
+            self.llm.config.eos_token_id,
+            self.llm.config.pad_token_id,
+            tuple(inputs_embeds.shape),
+            tuple(attention_mask.shape),
+            inputs_embeds.dtype,
+        )
+
         generated_ids = self.llm.generate(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,

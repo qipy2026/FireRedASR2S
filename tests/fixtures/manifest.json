@@ -1,0 +1,25 @@
+{
+  "sr": 16000,
+  "files": [
+    "clean_zh_short.wav",
+    "dialog_2spk_30s.wav",
+    "e2e_vad_speech_proxy.wav",
+    "enroll_spkA_1.wav",
+    "enroll_spkA_2.wav",
+    "enroll_spkA_3.wav",
+    "enroll_spkB_1.wav",
+    "enroll_spkB_2.wav",
+    "enroll_spkB_3.wav",
+    "mixed_zh_en_short.wav",
+    "noisy_short.wav"
+  ],
+  "rttm": [
+    "dialog_2spk_30s.rttm"
+  ],
+  "json": [
+    "dialog_2spk_30s_speakers.json",
+    "hotword_30sentences.json",
+    "manifest.json",
+    "numbers_text_samples.json"
+  ]
+}

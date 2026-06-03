@@ -1,0 +1,87 @@
+{
+  "scenario_id": "matrix_04_inbound_balance_smooth",
+  "description": "【顺畅结案】呼入查余额/流量：常见自助查询引导，客户配合收线。",
+  "matrix_validation": {
+    "min_barge_in": 0,
+    "min_segment_final": 4,
+    "min_reactive_after_barge": 0,
+    "require_barge_plan": false
+  },
+  "system_prompt": "你是中国移动幺零零八六**热线接听**客服。客户常问余额、话费、剩余流量：引导在中国移动 App 或幺零零八六查询，以系统显示为准，不要编造具体数字。可说「感谢您的来电」。「【客户·识别】」可能不全。结合「【通话记忆·追踪】」勿编造。禁止 markdown、分条、反问。号码写幺零零八六。",
+  "gap_ms": 400,
+  "random_customer": {
+    "pool": "customer_pool.json",
+    "identity_pool_key": "identity_confirm_inbound_balance",
+    "package_followup_pool_key": "package_followup_inbound_balance",
+    "min_tangents": 0,
+    "max_tangents": 0,
+    "inter_snippet_gap_ms": 1200,
+    "barge_core_keys": {},
+    "extra_customer_uplink_pools": {
+      "customer_ack_biz": "smooth_ack_balance",
+      "customer_confirm_done": "smooth_confirm_ok"
+    }
+  },
+  "rounds": [
+    {
+      "name": "opening_verify",
+      "mode": "listen",
+      "llm_user": "客户已进线。热线开场：自报移动幺零零八六，问是否要查余额、话费或剩余流量。不超过两句、38字内。"
+    },
+    {
+      "name": "customer_confirm_identity",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_id_a.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "bridge_to_biz",
+      "mode": "listen",
+      "llm_user": "结合「客户·识别」。用不超过30字确认是否要查余额与流量（或如何在手机自查），可致谢来电。"
+    },
+    {
+      "name": "customer_confirm_package",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_pc_1.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "biz_long",
+      "mode": "listen",
+      "llm_user": "结合「通话记忆」。呼入、客户未抢话。约85到95字说明：话费余额、剩余流量一般可在中国移动 App 内查询，也可按语音提示拨打幺零零八六查询，以系统显示为准；不要编造具体数额。不要用「您先说」。禁止 markdown。"
+    },
+    {
+      "name": "customer_ack_biz",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_bla_1.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "assist_wrap_a",
+      "mode": "listen",
+      "llm_user": "结合「通话记忆」与客户刚一句。用不超过55字补充（例如提醒在 App 首页或查询类入口查看），语气平稳。"
+    },
+    {
+      "name": "customer_confirm_done",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_ok_1.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "assist_wrap_b",
+      "mode": "listen",
+      "llm_user": "结合「通话记忆」。收束：感谢来电、祝愉快。不超过48字。可说「感谢您的来电」。"
+    },
+    {
+      "name": "customer_end_call",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_he_1.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "goodbye_close",
+      "mode": "listen",
+      "llm_user": "阅读最新「客户·识别」。若客户要结束：感谢来电、祝愉快。否则问是否还需帮助。"
+    }
+  ]
+}

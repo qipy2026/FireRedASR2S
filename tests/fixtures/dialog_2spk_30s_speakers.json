@@ -1,0 +1,14 @@
+{
+  "_comment": "Ground-truth speaker labels for dialog_2spk_30s.wav. spk_id matches RTTM column 7.",
+  "speakers": {
+    "spkA": "Alice",
+    "spkB": "Bob"
+  },
+  "turns": [
+    {"start_s": 0.0, "end_s": 6.0, "spk": "spkA"},
+    {"start_s": 6.0, "end_s": 12.0, "spk": "spkB"},
+    {"start_s": 12.0, "end_s": 18.0, "spk": "spkA"},
+    {"start_s": 18.0, "end_s": 24.0, "spk": "spkB"},
+    {"start_s": 24.0, "end_s": 30.0, "spk": "spkA"}
+  ]
+}

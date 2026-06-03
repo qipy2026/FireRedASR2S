@@ -1,0 +1,76 @@
+{
+  "scenario_id": "matrix_05_inbound_billing_one_barge",
+  "description": "【抢话一条】呼入账单：仅首轮长说明时被客户礼貌打断一次，后续正常收束（无跑题闲聊拼接）。",
+  "matrix_validation": {
+    "min_barge_in": 1,
+    "min_segment_final": 4,
+    "min_reactive_after_barge": 1,
+    "require_barge_plan": true
+  },
+  "system_prompt": "你是中国移动幺零零八六**热线接听**客服。可说「感谢您的来电」。客户可能插话打断，先短句承接再答要点。让客户用 App 或幺零零八六查明细是正常指引。「【客户·识别】」可能不全。结合「【通话记忆·追踪】」勿编造。禁止 markdown、分条、反问。号码写幺零零八六。",
+  "gap_ms": 400,
+  "random_customer": {
+    "pool": "customer_pool.json",
+    "identity_pool_key": "identity_confirm_inbound_billing",
+    "package_followup_pool_key": "package_followup_inbound_billing",
+    "min_tangents": 0,
+    "max_tangents": 0,
+    "inter_snippet_gap_ms": 1200,
+    "barge_core_keys": {
+      "biz_long": "barge_polite_billing"
+    }
+  },
+  "rounds": [
+    {
+      "name": "opening_verify",
+      "mode": "listen",
+      "llm_user": "客户已进线。热线开场：自报移动幺零零八六、问需要什么帮助。不超过两句、36字内。"
+    },
+    {
+      "name": "customer_confirm_identity",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_id_a.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "bridge_to_biz",
+      "mode": "listen",
+      "llm_user": "结合「客户·识别」。用不超过30字确认是否咨询话费、账单或扣款，可致谢来电。"
+    },
+    {
+      "name": "customer_confirm_package",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_pc_1.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "biz_long",
+      "mode": "barge",
+      "lead_silence_ms": 7200,
+      "post_user_tail_ms": 550,
+      "customer_wav": "wavs/cust_bpp_1.wav",
+      "llm_user": "结合「通话记忆」。呼入：约85到95字说明查账单/话费可走移动App、营业厅或幺零零八六；费用以系统为准；你方看不到明细须引导自查。不要用「您先说」。禁止 markdown。"
+    },
+    {
+      "name": "retry_after_c1",
+      "mode": "listen",
+      "llm_user": "结合「通话记忆」与客户打断内容。客户多半在问 App 或账单入口。①不超过16字承接；②用50到75字说明可在中国移动 App 内查找账单或详单类入口（概括「我的」或「查询」即可，勿编造不存在的菜单全名）；③仍不会可引导幺零零八六。总不超过92字。"
+    },
+    {
+      "name": "retry_after_c2",
+      "mode": "listen",
+      "llm_user": "结合「通话记忆」。收尾：确认是否听清、是否还需要帮助；若可结束则感谢来电、祝愉快。不超过62字。可说「感谢您的来电」。"
+    },
+    {
+      "name": "customer_end_call",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_he_1.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "goodbye_close",
+      "mode": "listen",
+      "llm_user": "阅读最新「客户·识别」。若客户要结束：感谢来电、祝愉快，不超过28字。"
+    }
+  ]
+}

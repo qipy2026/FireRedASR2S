@@ -8,6 +8,8 @@ from dataclasses import dataclass
 
 import torch
 
+from fireredasr2s.torch_device import resolve_compute_dtype, resolve_fire_red_asr_torch_device
+
 from .data.feat import FeatExtractor
 from .models.fireredlid_aed import FireRedLidAed
 from .models.param import count_model_parameters
@@ -18,6 +20,7 @@ from .tokenizer.lid_tokenizer import LidTokenizer
 class FireRedLidConfig:
     use_gpu: bool = True
     use_half: bool = False
+    device: str = ""
 
 
 class FireRedLid:
@@ -46,12 +49,21 @@ class FireRedLid:
         self.config.softmax_smoothing = 1.25
         self.config.aed_length_penalty = 0.6
         self.config.eos_penalty = 1.0
-        if self.config.use_gpu:
-            if self.config.use_half:
-                self.model.half()
-            self.model.cuda()
-        else:
+        self.device = resolve_fire_red_asr_torch_device(
+            device_str=(getattr(config, "device", None) or "").strip(),
+            use_gpu=bool(config.use_gpu),
+        )
+        self.compute_dtype = resolve_compute_dtype(
+            use_half=bool(config.use_half), device=self.device
+        )
+        if self.device.type == "cpu":
             self.model.cpu()
+            if self.compute_dtype is not None:
+                self.model.to(self.compute_dtype)
+        else:
+            self.model.to(self.device)
+            if self.compute_dtype is not None:
+                self.model.to(self.compute_dtype)
 
     @torch.no_grad()
     def process(self, batch_uttid, batch_wav_path):
@@ -65,10 +77,10 @@ class FireRedLid:
             traceback.print_exc()
             return [{"uttid": uttid, "lang":""} for uttid in batch_uttid_origin]
         total_dur = sum(durs)
-        if self.config.use_gpu:
-            feats, lengths = feats.cuda(), lengths.cuda()
-            if self.config.use_half:
-                feats = feats.half()
+        if self.device.type != "cpu":
+            feats, lengths = feats.to(self.device), lengths.to(self.device)
+        if self.compute_dtype is not None:
+            feats = feats.to(self.compute_dtype)
 
         start_time = time.time()
 

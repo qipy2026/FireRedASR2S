@@ -5,19 +5,33 @@ import os
 import re
 import time
 import traceback
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import torch
+
+from fireredasr2s.torch_device import (
+    resolve_compute_dtype,
+    resolve_fire_red_asr_torch_device,
+)
 
 from .data.asr_feat import ASRFeatExtractor
 from .models.fireredasr_aed import FireRedAsrAed
 from .models.fireredasr_llm import FireRedAsrLlm
 from .models.lstm_lm import LstmLm
+from .decoding.hotword import build_hotword_biaser
+from .runtimes import get_llm_runtime
 from .models.param import count_model_parameters
 from .tokenizer.aed_tokenizer import ChineseCharEnglishSpmTokenizer
 from .tokenizer.llm_tokenizer import LlmTokenizerWrapper
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_asr_device(config: "FireRedAsr2Config") -> torch.device:
+    return resolve_fire_red_asr_torch_device(
+        device_str=(getattr(config, "device", None) or "").strip(),
+        use_gpu=bool(config.use_gpu),
+    )
 
 
 @dataclass
@@ -37,6 +51,17 @@ class FireRedAsr2Config:
     temperature: float = 1.0
     elm_dir: str = ""
     elm_weight: float = 0.0
+    # If non-empty, overrides use_gpu placement (e.g. "xpu", "cuda:0").
+    # If empty and use_gpu is True: CUDA if available, else Intel XPU if available, else CPU.
+    device: str = ""
+    hotwords: list[str] = field(default_factory=list)
+    hotword_weight: float = 0.0
+    hotword_complete_bonus: float = 0.0
+    runtime: str = "torch"
+    # If set (AED only): load weights from ``torch.ao.quantization.quantize_dynamic`` checkpoint
+    # produced by ``scripts/quantize_aed_int8.py``. **CPU inference only**; leave ``use_half`` False.
+    aed_dynamic_int8_pt: str = ""
+
     def __post_init__(self):
         pass
 
@@ -53,7 +78,25 @@ class FireRedAsr2:
             model_path = os.path.join(model_dir, "model.pth.tar")
             dict_path =os.path.join(model_dir, "dict.txt")
             spm_model = os.path.join(model_dir, "train_bpe1000.model")
-            model = load_fireredasr_aed_model(model_path)
+            int8_pt = (getattr(config, "aed_dynamic_int8_pt", "") or "").strip()
+            if int8_pt:
+                if bool(config.use_half):
+                    raise ValueError(
+                        "aed_dynamic_int8_pt is set: use_half must be False (INT8 Linear conflicts with fp16/bf16)."
+                    )
+                dev = _resolve_asr_device(config)
+                if dev.type != "cpu":
+                    raise ValueError(
+                        "aed_dynamic_int8_pt is for PyTorch dynamic INT8 on CPU only. "
+                        "Use --asr_use_gpu 0 and --asr_device ''. "
+                        "For GPU/XPU speedup use --asr_use_half 1 without INT8 checkpoint."
+                    )
+                if not os.path.isfile(int8_pt):
+                    raise FileNotFoundError(f"aed_dynamic_int8_pt not found: {int8_pt}")
+                model = load_fireredasr_aed_model_dynamic_int8(model_path, int8_pt)
+                logger.info("Loaded AED with dynamic INT8 Linear (CPU): %s", int8_pt)
+            else:
+                model = load_fireredasr_aed_model(model_path)
             tokenizer = ChineseCharEnglishSpmTokenizer(dict_path, spm_model)
         elif asr_type == "llm":
             model_path = os.path.join(model_dir, "model.pth.tar")
@@ -79,15 +122,40 @@ class FireRedAsr2:
         self.tokenizer = tokenizer
         self.elm = elm
         self.config = config
+        self.device = _resolve_asr_device(config)
+        self._aed_dynamic_int8 = (
+            asr_type == "aed"
+            and bool((getattr(config, "aed_dynamic_int8_pt", "") or "").strip())
+        )
+        self.compute_dtype = resolve_compute_dtype(
+            use_half=bool(config.use_half), device=self.device
+        )
         logger.info(self.config)
-        if self.config.use_gpu:
-            if self.config.use_half:
-                self.model.half()
-            self.model.cuda()
-            if self.elm:
-                self.elm.cuda()
-        else:
+        logger.info("FireRedAsr2 device=%s compute_dtype=%s", self.device, self.compute_dtype)
+        if self.device.type == "cpu":
             self.model.cpu()
+            if self.compute_dtype is not None and not self._aed_dynamic_int8:
+                self.model.to(self.compute_dtype)
+            if self.elm:
+                self.elm.cpu()
+                if self.compute_dtype is not None:
+                    self.elm.to(self.compute_dtype)
+        else:
+            self.model.to(self.device)
+            if self.compute_dtype is not None:
+                self.model.to(self.compute_dtype)
+            if self.elm:
+                self.elm.to(self.device)
+                if self.compute_dtype is not None:
+                    self.elm.to(self.compute_dtype)
+
+        self.hotword_biaser = None
+        if self.asr_type == "aed":
+            odim = len(self.tokenizer.dict)
+            self.hotword_biaser = build_hotword_biaser(self.tokenizer, self.config, odim)
+        self.llm_runtime = None
+        if self.asr_type == "llm":
+            self.llm_runtime = get_llm_runtime(getattr(self.config, "runtime", "torch"))
 
     @torch.no_grad()
     def transcribe(self, batch_uttid, batch_wav_path):
@@ -101,10 +169,10 @@ class FireRedAsr2:
             traceback.print_exc()
             return [{"uttid": uttid, "text":""} for uttid in batch_uttid_origin]
         total_dur = sum(durs)
-        if self.config.use_gpu:
-            feats, lengths = feats.cuda(), lengths.cuda()
-            if self.config.use_half:
-                feats = feats.half()
+        if self.device.type != "cpu":
+            feats, lengths = feats.to(self.device), lengths.to(self.device)
+        if self.compute_dtype is not None:
+            feats = feats.to(self.compute_dtype)
 
         if self.asr_type == "aed":
             start_time = time.time()
@@ -120,7 +188,8 @@ class FireRedAsr2:
                     self.config.eos_penalty,
                     self.config.return_timestamp,
                     self.elm,
-                    self.config.elm_weight
+                    self.config.elm_weight,
+                    self.hotword_biaser,
                 )
             except Exception as e:
                 traceback.print_exc()
@@ -149,20 +218,21 @@ class FireRedAsr2:
                 LlmTokenizerWrapper.preprocess_texts(
                     origin_texts=[""]*feats.size(0), tokenizer=self.tokenizer,
                     max_len=128, decode=True)
-            if self.config.use_gpu:
-                input_ids = input_ids.cuda()
-                attention_mask = attention_mask.cuda()
+            if self.device.type != "cpu":
+                input_ids = input_ids.to(self.device)
+                attention_mask = attention_mask.to(self.device)
             start_time = time.time()
 
             try:
-                generated_ids = self.model.transcribe(
+                generated_ids = self.llm_runtime.transcribe(
+                    self.model,
                     feats, lengths, input_ids, attention_mask,
                     self.config.beam_size,
                     self.config.decode_max_len,
                     self.config.decode_min_len,
                     self.config.repetition_penalty,
                     self.config.llm_length_penalty,
-                    self.config.temperature
+                    self.config.temperature,
                 )
                 texts = self.tokenizer.batch_decode(generated_ids,
                                                     skip_special_tokens=True)
@@ -223,6 +293,25 @@ def load_fireredasr_aed_model(model_path):
     model = FireRedAsrAed.from_args(package["args"])
     model.load_state_dict(package["model_state_dict"], strict=False)
     return model
+
+
+def load_fireredasr_aed_model_dynamic_int8(model_path: str, int8_checkpoint: str):
+    """Rebuild float AED, apply ``quantize_dynamic`` on Linear, then load INT8 state (CPU)."""
+    model = load_fireredasr_aed_model(model_path)
+    model.eval()
+    model.cpu()
+    qmodel = torch.ao.quantization.quantize_dynamic(
+        model, {torch.nn.Linear}, dtype=torch.qint8
+    )
+    payload = torch.load(int8_checkpoint, map_location="cpu", weights_only=False)
+    state = payload.get("state")
+    if state is None:
+        raise ValueError(
+            f"Invalid INT8 checkpoint (expected dict with 'state' key): {int8_checkpoint!r}"
+        )
+    qmodel.load_state_dict(state, strict=False)
+    qmodel.eval()
+    return qmodel
 
 
 def load_firered_llm_model_and_tokenizer(model_path, encoder_path, llm_dir):

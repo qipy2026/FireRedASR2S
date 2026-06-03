@@ -1,12 +1,39 @@
-__pycache__
-out
+__pycache__/
+.pytest_cache/
+.venv/
+.venv-vllm/
+.env
+.vscode/
+.cursor/
+out/
+output/
+output_zh_test/
+dump.rdb
+_wheel_probe/
+reports/junit.xml
 *.tar.gz
-*.wav
 *.TextGrid
 *.srt
-text
+text/
 wav.scp
 utt2event
 pretrained_models/
 *.swp
 *.swo
+
+# Generated / local inference artifacts (*.wav tracked under assets/ remain in git if already added)
+*.wav
+!assets/hello_en.wav
+!assets/hello_zh.wav
+!assets/event.wav
+
+# Local-only E2E fixtures (see tests/test_e2e_by_feature.py)
+assets/metting_*
+assets/long_multi_speaker_*
+assets/hello_zh_tts.wav
+
+# UI assets from removed baifu_cc frontend
+assets/bairong.png
+assets/bg1.png
+assets/bg2.png
+assets/logo.png

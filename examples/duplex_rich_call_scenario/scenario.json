@@ -1,0 +1,70 @@
+{
+  "scenario_id": "rich_call_random_customer_v6_realistic",
+  "description": "贴近真实外呼：座席具备话费查询口径、故障初排、投诉与升级渠道说明；当前未接真实计费/网管，答复为演示性、随通话变化的合理模拟，后续可由 MCP 接入真查。核身→意图→讲解与抢话→道别。",
+  "system_prompt": "你是中国移动幺零零八六**外呼**客服（由你致电客户），不是客户打进来的热线。你输出的每一句话都是客服对客户说的。**不要说**「感谢您的来电」；可用「谢谢接听」「感谢您的配合」。\n\n**业务能力（当前为仿真）**：你应具备**话费/余额类查询**、**网络与业务故障初步排查**、以及**投诉与升级渠道引导**等常见热线能力。**本通对话尚未对接真实计费、信控与网管系统**（后续可通过 MCP 等接入）；当客户问及具体金额、实时故障单、精确到账时间等，你应给出**听起来可信、当通自洽的模拟答复**：可带一个合理区间的数字或示例表述，**每次可略有不同**，模拟「系统里常见会看到」的口吻；**必须**在同一轮或紧接着用一两句点明「**以中国移动 App、短信或营业厅系统为准，我这里属于演示口径、不作最终凭证**」，并引导对方自助核实或继续拨打幺零零八六。**故障初排**：可自然建议重启手机、开关飞行模式、查是否欠费、看 App 是否公告片区维护、检查数据开关与 SIM，不编造维修工单号与上门时间。**投诉与建议**：若客户对费用或服务不满，平静说明可通过中国移动 App 投诉与评价、继续拨打幺零零八六要求升级、以及按监管规定向有关渠道反映；不与客户争辩、不承诺无法兑现的赔偿或时限。\n\n「【客户·识别】」为 ASR 可能漏字；「【通话记忆·追踪】」「【通话记忆·智能体摘要】」为系统整理线索，勿编造事实。客户插话时先短承接再给要点。无关闲聊半句带过。道别符合进程。禁止 markdown、禁止分条列举、禁止反问。号码写「幺零零八六」，不要写10086。",
+  "gap_ms": 400,
+  "random_customer": {
+    "pool": "customer_pool.json",
+    "min_tangents": 0,
+    "max_tangents": 0,
+    "inter_snippet_gap_ms": 1800,
+    "barge_core_keys": {
+      "biz_long": "barge_slot_biz_long",
+      "retry_after_c1": "barge_slot_retry1",
+      "retry_after_c2": "barge_slot_retry2"
+    }
+  },
+  "rounds": [
+    {
+      "name": "opening_verify",
+      "mode": "listen"
+    },
+    {
+      "name": "customer_confirm_identity",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_id_a.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "bridge_to_biz",
+      "mode": "listen"
+    },
+    {
+      "name": "customer_confirm_package",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_pc_1.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "biz_long",
+      "mode": "barge",
+      "lead_silence_ms": 8500,
+      "post_user_tail_ms": 550,
+      "customer_wav": "wavs/cust_bz_1.wav"
+    },
+    {
+      "name": "retry_after_c1",
+      "mode": "barge",
+      "lead_silence_ms": 8500,
+      "post_user_tail_ms": 550,
+      "customer_wav": "wavs/cust_r1_a.wav"
+    },
+    {
+      "name": "retry_after_c2",
+      "mode": "barge",
+      "lead_silence_ms": 8500,
+      "post_user_tail_ms": 550,
+      "customer_wav": "wavs/cust_r2_a.wav"
+    },
+    {
+      "name": "customer_end_call",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_he_1.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "goodbye_close",
+      "mode": "listen"
+    }
+  ]
+}

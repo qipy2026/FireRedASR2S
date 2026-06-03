@@ -1,0 +1,87 @@
+{
+  "scenario_id": "matrix_03_inbound_network_smooth",
+  "description": "【顺畅结案】呼入网络/信号：客户配合自助排查，无抢话，收线自然。",
+  "matrix_validation": {
+    "min_barge_in": 0,
+    "min_segment_final": 4,
+    "min_reactive_after_barge": 0,
+    "require_barge_plan": false
+  },
+  "system_prompt": "你是中国移动幺零零八六**热线接听**客服。客户报网络/信号问题：给简单排查与自助渠道，不编造维修单号或上门时间。可说「感谢您的来电」。「【客户·识别】」可能不全。结合「【通话记忆·追踪】」勿编造。禁止 markdown、分条、反问。号码写幺零零八六。",
+  "gap_ms": 400,
+  "random_customer": {
+    "pool": "customer_pool.json",
+    "identity_pool_key": "identity_confirm_inbound_network",
+    "package_followup_pool_key": "package_followup_inbound_network",
+    "min_tangents": 0,
+    "max_tangents": 0,
+    "inter_snippet_gap_ms": 1200,
+    "barge_core_keys": {},
+    "extra_customer_uplink_pools": {
+      "customer_ack_biz": "smooth_ack_network",
+      "customer_confirm_done": "smooth_confirm_ok"
+    }
+  },
+  "rounds": [
+    {
+      "name": "opening_verify",
+      "mode": "listen",
+      "llm_user": "客户已进线。热线开场：自报移动幺零零八六、问遇到什么网络或信号问题。不超过两句、40字内。不要外呼核身。"
+    },
+    {
+      "name": "customer_confirm_identity",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_id_a.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "bridge_to_biz",
+      "mode": "listen",
+      "llm_user": "结合「客户·识别」。用不超过30字确认是否为上网慢、无法上网或信号差等，并表示会简单指引。可致谢来电。"
+    },
+    {
+      "name": "customer_confirm_package",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_pc_1.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "biz_long",
+      "mode": "listen",
+      "llm_user": "结合「通话记忆」。呼入、客户未抢话。约85到95字做首问处理：可先建议重启或开关飞行模式、查欠费、看 App 是否有区域故障公告；无法远程修机、看不到基站实时状态须说明；引导自助或幺零零八六报障。不要用「您先说」。禁止 markdown。"
+    },
+    {
+      "name": "customer_ack_biz",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_na_1.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "assist_wrap_a",
+      "mode": "listen",
+      "llm_user": "结合「通话记忆」与客户刚一句。用不超过55字补充（例如仍异常可走 App 报障或再打幺零零八六），语气平稳。"
+    },
+    {
+      "name": "customer_confirm_done",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_ok_1.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "assist_wrap_b",
+      "mode": "listen",
+      "llm_user": "结合「通话记忆」。收束：若无新问题，感谢来电、祝愉快。不超过48字。可说「感谢您的来电」。"
+    },
+    {
+      "name": "customer_end_call",
+      "mode": "customer_uplink_only",
+      "customer_wav": "wavs/cust_he_1.wav",
+      "post_user_tail_ms": 450
+    },
+    {
+      "name": "goodbye_close",
+      "mode": "listen",
+      "llm_user": "阅读最新「客户·识别」。若客户要结束：感谢来电、祝愉快。否则问是否还需协助排障。"
+    }
+  ]
+}

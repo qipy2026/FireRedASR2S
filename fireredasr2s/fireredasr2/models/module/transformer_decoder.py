@@ -40,7 +40,7 @@ class TransformerDecoder(nn.Module):
     def batch_beam_search(self, encoder_outputs, src_masks,
                    beam_size=1, nbest=1, decode_max_len=0,
                    softmax_smoothing=1.0, length_penalty=0.0, eos_penalty=1.0,
-                   elm=None, elm_weight=0.0):
+                   elm=None, elm_weight=0.0, hotword_biaser=None):
         B = beam_size
         N, Ti, H = encoder_outputs.size()
         device = encoder_outputs.device
@@ -61,6 +61,7 @@ class TransformerDecoder(nn.Module):
         is_finished = torch.zeros_like(scores)
         if elm is not None:
             elm_cache = elm.init_hidden(encoder_outputs, N*B)
+        hw_states = torch.zeros(N * B, dtype=torch.long, device=device)
 
         # Autoregressive Prediction
         for t in range(maxlen):
@@ -96,9 +97,15 @@ class TransformerDecoder(nn.Module):
             if eos_penalty != 1.0:
                 t_scores[:, self.eos_id] *= eos_penalty
 
+            if hotword_biaser is not None:
+                t_scores = t_scores + hotword_biaser.delta_logits(hw_states, t_scores.dtype)
+
             t_topB_scores, t_topB_ys = torch.topk(t_scores, k=B, dim=1)
             t_topB_scores = self.set_finished_beam_score_to_zero(t_topB_scores, is_finished)
             t_topB_ys = self.set_finished_beam_y_to_eos(t_topB_ys, is_finished)
+            # Confidences must use pre-fusion acoustic log-probs; shallow fusion (ELM / hotwords)
+            # breaks log_softmax semantics and can make exp(t_scores) > 1.
+            t_topB_origin_scores = torch.gather(t_origin_scores, 1, t_topB_ys)
 
             # Accumulated
             scores = scores + t_topB_scores
@@ -119,7 +126,9 @@ class TransformerDecoder(nn.Module):
 
             # Update confidences
             confidences = confidences[topB_row_number_in_ys]
-            t_confidences = torch.gather(t_topB_scores.view(N, B*B), dim=1, index=topB_score_ids).view(N*B, 1)
+            t_confidences = torch.gather(
+                t_topB_origin_scores.view(N, B*B), dim=1, index=topB_score_ids
+            ).view(N*B, 1)
             t_confidences = torch.exp(t_confidences)
             assert torch.all(t_confidences <= 1.0)
             assert torch.all(t_confidences >= 0.0)
@@ -133,6 +142,10 @@ class TransformerDecoder(nn.Module):
             caches = new_caches
             if elm and elm_weight > 0.0:
                 elm_cache = (elm_cache[0][:, topB_row_number_in_ys], elm_cache[1][:, topB_row_number_in_ys])
+
+            if hotword_biaser is not None:
+                hw_states = hw_states[topB_row_number_in_ys]
+                hw_states = hotword_biaser.advance(hw_states, t_ys.squeeze(-1))
 
             # Update finished state
             is_finished = t_ys.eq(self.eos_id)

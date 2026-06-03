@@ -1,0 +1,50 @@
+{
+  "scenario_id": "service_desk_rich_v1",
+  "chunk_ms": 40,
+  "silence_after_greeting_ms": 220,
+  "silence_between_turns_ms": 280,
+  "greeting_tail_extra_chunks": 12,
+  "post_user_silence_ms": 200,
+  "post_user_vad_extra_chunks": 18,
+  "assistant_playback_extra_chunks": 18,
+  "user_utterance_pad_ms": 180,
+  "asr_hotword_weight": 2.0,
+  "asr_hotword_complete_bonus": 0.5,
+  "asr_hotwords_extra": [
+    "清楚了",
+    "谢谢",
+    "再见",
+    "听明白了",
+    "非常感谢"
+  ],
+  "greeting": {
+    "text": "您好，智能语音服务台为您效劳。下面将连续演示多轮问答，每轮说完请稍停半秒。",
+    "wav": "wavs/greeting.wav"
+  },
+  "turns": [
+    {
+      "user_text": "我想预约后天上午十点的牙科复诊。",
+      "user_wav": "wavs/u01.wav",
+      "assistant_text": "好的，已为您预留后天上午十点牙科复诊号，请携带身份证件并提前十五分钟到院。",
+      "assistant_wav": "wavs/a01.wav"
+    },
+    {
+      "user_text": "如果临时去不了，最晚要提前多久取消？",
+      "user_wav": "wavs/u02.wav",
+      "assistant_text": "建议最晚提前四小时在小程序里取消预约，以免占用号源。",
+      "assistant_wav": "wavs/a02.wav"
+    },
+    {
+      "user_text": "复诊费用大概要准备多少？",
+      "user_wav": "wavs/u03.wav",
+      "assistant_text": "普通复诊挂号加常规检查，一般在八十到一百二十元区间，以医院当日结算为准。",
+      "assistant_wav": "wavs/a03.wav"
+    },
+    {
+      "user_text": "我都听明白了，非常感谢，再见。",
+      "user_wav": "wavs/u04.wav",
+      "assistant_text": "不客气，祝您生活愉快，再见。",
+      "assistant_wav": "wavs/a04.wav"
+    }
+  ]
+}

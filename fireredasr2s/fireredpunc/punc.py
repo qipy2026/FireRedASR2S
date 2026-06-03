@@ -7,6 +7,8 @@ from dataclasses import dataclass
 
 import torch
 
+from fireredasr2s.torch_device import resolve_compute_dtype, resolve_fire_red_asr_torch_device
+
 from .data.hf_bert_tokenizer import HfBertTokenizer
 from .models.fireredpunc_bert import FireRedPuncBert
 from .models.param import count_model_parameters
@@ -18,6 +20,8 @@ logger = logging.getLogger(__name__)
 @dataclass
 class FireRedPuncConfig:
     use_gpu: bool = True
+    use_half: bool = False
+    device: str = ""
     sentence_max_length: int = -1
 
 
@@ -35,10 +39,21 @@ class FireRedPunc:
         self.model_io = model_io
         self.model = model
         self.config = config
-        if self.config.use_gpu:
-            self.model.cuda()
-        else:
+        self.device = resolve_fire_red_asr_torch_device(
+            device_str=(getattr(config, "device", None) or "").strip(),
+            use_gpu=bool(config.use_gpu),
+        )
+        self.compute_dtype = resolve_compute_dtype(
+            use_half=bool(config.use_half), device=self.device
+        )
+        if self.device.type == "cpu":
             self.model.cpu()
+            if self.compute_dtype is not None:
+                self.model.to(self.compute_dtype)
+        else:
+            self.model.to(self.device)
+            if self.compute_dtype is not None:
+                self.model.to(self.compute_dtype)
 
     @torch.no_grad()
     def process(self, batch_text, batch_uttid=None):
@@ -48,8 +63,10 @@ class FireRedPunc:
 
         # 1. Prepare inputs
         padded_inputs, lengths, txt_tokens = self.model_io.text2tensor(batch_text)
-        if self.config.use_gpu:
-            padded_inputs, lengths = padded_inputs.cuda(), lengths.cuda()
+        if self.device.type != "cpu":
+            padded_inputs, lengths = padded_inputs.to(self.device), lengths.to(self.device)
+        if self.compute_dtype is not None:
+            padded_inputs = padded_inputs.to(self.compute_dtype)
 
         # 2. Model inference
         logits = self.model.forward_model(padded_inputs, lengths)  # (N,T,C)
@@ -80,8 +97,10 @@ class FireRedPunc:
         # 1. Prepare inputs
         padded_inputs, lengths, batch_txt_tokens, batch_tokens_split_num = \
             self.model_io.timestamp2tensor(batch_timestamp)
-        if self.config.use_gpu:
-            padded_inputs, lengths = padded_inputs.cuda(), lengths.cuda()
+        if self.device.type != "cpu":
+            padded_inputs, lengths = padded_inputs.to(self.device), lengths.to(self.device)
+        if self.compute_dtype is not None:
+            padded_inputs = padded_inputs.to(self.compute_dtype)
 
         # 2. Model inference
         logits = self.model.forward_model(padded_inputs, lengths)  # (N,T,C)

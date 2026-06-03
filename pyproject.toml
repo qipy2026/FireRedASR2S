@@ -21,6 +21,31 @@ dependencies = [
     "textgrid==1.6.1",
 ]
 
+[project.optional-dependencies]
+# `datasets` pulls `pyarrow`; on some Windows + GPU stacks an incompatible pyarrow wheel may
+# fault at import — pin pyarrow or use WSL/Linux if CAM++ diar pipeline fails to load.
+modelscope = [
+    "modelscope",
+    "addict",
+    "datasets",
+    "simplejson",
+    "sortedcontainers",
+    "scikit-learn",
+    "hdbscan",
+    "umap-learn",
+]
+
+mic = [
+    "sounddevice>=0.5.0",
+]
+
+# Full-duplex mic + TTS demo (``examples/full_duplex_mic_tts_demo.py``): sounddevice + local TTS.
+# Edge-TTS path additionally needs ``ffmpeg`` on PATH and ``pip install edge-tts``.
+duplex = [
+    "sounddevice>=0.5.0",
+    "pyttsx3>=2.90",
+]
+
 [project.scripts]
 fireredasr2s-cli = "fireredasr2s.fireredasr2s_cli:cli_main"
 

@@ -1,0 +1,8 @@
+# Dev / test deps for FireRedASR2S iteration plan.
+# Install on top of the runtime env:
+#   .venv/Scripts/python.exe -m pip install -r requirements-dev.txt
+pytest>=8.0
+pytest-html>=4.0
+jiwer>=3.0
+# Optional metrics for diarization (T6/T7); skipped if missing
+pyannote.metrics>=3.2 ; python_version < "3.13"

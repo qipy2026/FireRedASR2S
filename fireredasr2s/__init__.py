@@ -16,8 +16,11 @@ if _PROJECT_ROOT not in sys.path:
 
 from fireredasr2s.fireredasr2system import (
     FireRedAsr2System,
-    FireRedAsr2SystemConfig
+    FireRedAsr2SystemConfig,
 )
+from fireredasr2s.duplex import NlmsMonoAec
+from fireredasr2s.full_duplex_stream import FireRedFullDuplexStreamSession
+from fireredasr2s.stream_session import FireRedAsr2StreamSession
 
 
 # API
@@ -25,6 +28,9 @@ __all__ = [
     "__version__",
     "FireRedAsr2System",
     "FireRedAsr2SystemConfig",
+    "FireRedAsr2StreamSession",
+    "FireRedFullDuplexStreamSession",
+    "NlmsMonoAec",
     "FireRedAsr2",
     "FireRedAsr2Config",
     "FireRedVad",
